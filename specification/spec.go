@@ -6,6 +6,7 @@ import (
 	"errors"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/lxc/go-lxc.v2"
+	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -13,10 +14,16 @@ import (
 	"strings"
 )
 
+type Manifest struct {
+	Labels      map[string]string
+	Maintainers []string
+}
+
 type BuilderState struct {
 	Container *lxc.Container
 	Env       []string
 	Cwd       string
+	manifest  Manifest
 }
 
 type Spec struct {
@@ -28,14 +35,15 @@ type Spec struct {
 
 func New(id, file string) *Spec {
 	return &Spec{
+		ID:         id,
 		File:       file,
 		Statements: []string{},
-		ID:         id,
 	}
 }
 
 func (spec *Spec) Parse() error {
 	fi, err := os.Open(spec.File)
+
 	if err != nil {
 		return err
 	}
@@ -79,7 +87,28 @@ func (spec *Spec) Parse() error {
 	return nil
 }
 
+func (spec *Spec) Destroy() error {
+	if spec.State.Container == nil {
+		log.Warn("Container is not initialized")
+		return nil
+	}
+	if spec.State.Container.Defined() {
+		log.Warn("Container is not present")
+		return nil
+	}
+	if spec.State.Container.State() == lxc.RUNNING {
+		if err := spec.State.Container.Stop(); err != nil {
+			log.Errorf("Failed to stop running container. Err: %s\n", err)
+			return err
+		}
+	}
+	return spec.Destroy()
+}
+
 func (spec *Spec) Build() error {
+	spec.State = BuilderState{
+		manifest: Manifest{Labels: make(map[string]string)},
+	}
 	for _, statement := range spec.Statements {
 		log.Infof("Proecssing:|%s|\n", statement)
 		words := strings.Fields(statement)
@@ -122,7 +151,15 @@ func (spec *Spec) Build() error {
 		case "COPY":
 			// copy over files
 		case "LABEL":
-			// FIXME
+			for i := 1; i < len(words); i++ {
+				if strings.Contains(words[i], "=") {
+					pair := strings.Split(words[i], "=")
+					spec.State.manifest.Labels[pair[0]] = pair[1]
+				} else {
+					log.Fatalf("Invalid LABEL instruction. LABELS must have '=' in them")
+					return errors.New("Invalid LABEL instruction. LABELS must have '=' in them")
+				}
+			}
 		case "USER":
 			// set exec user id
 		case "VOLUME":
@@ -130,17 +167,26 @@ func (spec *Spec) Build() error {
 		case "STOPSIGNAL":
 			// FIXME
 		case "MAINTAINER":
-			// FIXME
+			spec.State.manifest.Maintainers = append(spec.State.manifest.Maintainers, strings.Join(words[1:len(words)], " "))
 		case "CMD":
 			// FIXME
 		case "ENTRYPOINT":
 			// FIXME
 		case "EXPOSE":
 			// FIXME
-
 		}
 	}
-	return nil
+	return spec.writeManifest()
+}
+
+func (spec *Spec) writeManifest() error {
+	rootfs := spec.State.Container.ConfigItem("lxc.rootfs")[0]
+	manifestPath := filepath.Join(rootfs, "../manifest.yml")
+	d, err := yaml.Marshal(&spec.State.manifest)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(manifestPath, d, 0644)
 }
 
 func (spec *Spec) runCommand(command []string) error {
