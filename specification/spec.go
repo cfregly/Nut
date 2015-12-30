@@ -9,14 +9,17 @@ import (
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
 type Manifest struct {
-	Labels      map[string]string
-	Maintainers []string
+	Labels       map[string]string
+	Maintainers  []string
+	ExposedPorts []uint64
 }
 
 type BuilderState struct {
@@ -107,7 +110,10 @@ func (spec *Spec) Destroy() error {
 
 func (spec *Spec) Build() error {
 	spec.State = BuilderState{
-		manifest: Manifest{Labels: make(map[string]string)},
+		manifest: Manifest{
+			Labels:       make(map[string]string),
+			ExposedPorts: []uint64{},
+		},
 	}
 	for _, statement := range spec.Statements {
 		log.Infof("Proecssing:|%s|\n", statement)
@@ -147,9 +153,13 @@ func (spec *Spec) Build() error {
 		case "WORKDIR":
 			spec.State.Cwd = words[1]
 		case "ADD":
-			// setup bind mount
+			if err := spec.addFiles(words[1], words[2]); err != nil {
+				return err
+			}
 		case "COPY":
-			// copy over files
+			if err := spec.addFiles(words[1], words[2]); err != nil {
+				return err
+			}
 		case "LABEL":
 			for i := 1; i < len(words); i++ {
 				if strings.Contains(words[i], "=") {
@@ -160,23 +170,72 @@ func (spec *Spec) Build() error {
 					return errors.New("Invalid LABEL instruction. LABELS must have '=' in them")
 				}
 			}
+		case "EXPOSE":
+			for _, p := range words[1:len(words)] {
+				port, err := strconv.ParseUint(p, 10, 64)
+				if err != nil {
+					log.Errorf("Error parsing ports in EXPOSE instruction. Err:%s\n", err)
+				}
+				spec.State.manifest.ExposedPorts = append(spec.State.manifest.ExposedPorts, port)
+			}
+		case "MAINTAINER":
+			spec.State.manifest.Maintainers = append(spec.State.manifest.Maintainers, strings.Join(words[1:len(words)], " "))
 		case "USER":
-			// set exec user id
+			// FIXME
 		case "VOLUME":
 			// FIXME
 		case "STOPSIGNAL":
 			// FIXME
-		case "MAINTAINER":
-			spec.State.manifest.Maintainers = append(spec.State.manifest.Maintainers, strings.Join(words[1:len(words)], " "))
 		case "CMD":
 			// FIXME
 		case "ENTRYPOINT":
 			// FIXME
-		case "EXPOSE":
-			// FIXME
 		}
 	}
+	if err := spec.fetchArtifact(); err != nil {
+		return err
+	}
 	return spec.writeManifest()
+}
+
+func (spec *Spec) fetchArtifact() error {
+	rootfs := spec.State.Container.ConfigItem("lxc.rootfs")[0]
+	for k, v := range spec.State.manifest.Labels {
+		if strings.HasPrefix(k, "nut_artifact_") {
+			artifact := filepath.Base(v)
+			if err := spec.runCommand([]string{"cp", "-r", v, filepath.Join("/tmp", artifact)}); err != nil {
+				log.Errorf("Failed to copy artifact to /tmp. Error: %s\n", err)
+				return err
+			}
+			pathInContainer := filepath.Join(rootfs, "tmp", artifact)
+			cmd := exec.Command("/bin/cp", "-ar", pathInContainer, artifact)
+			if err := cmd.Run(); err != nil {
+				log.Errorf("Failed to copy files from container to host. Error: %s\n", err)
+			}
+		}
+	}
+	return nil
+}
+
+func (spec *Spec) addFiles(src, dest string) error {
+	rootfs := spec.State.Container.ConfigItem("lxc.rootfs")[0]
+	base := filepath.Base(src)
+	tmpContainer := filepath.Join(rootfs, "tmp", base)
+	cmd := exec.Command("/bin/cp", "-ar", src, tmpContainer)
+	if err := cmd.Run(); err != nil {
+		log.Errorf("Failed to copy temporary files from host to container tmp directory.\n", err)
+		return err
+	}
+	if err := spec.runCommand([]string{"cp", "-r", filepath.Join("/tmp", filepath.Base(src)), dest}); err != nil {
+		log.Errorf("Failed to copy temporary files within container's /tmp to target directory. Error: %s\n", err)
+		return err
+	}
+	rmCmd := exec.Command("/bin/rm", "-rf", tmpContainer)
+	if err := rmCmd.Run(); err != nil {
+		log.Error("Failed to delete temporary files")
+		return err
+	}
+	return nil
 }
 
 func (spec *Spec) writeManifest() error {
