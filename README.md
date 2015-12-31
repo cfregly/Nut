@@ -48,3 +48,19 @@ And then nut can be invoked as:
 nut -ephemeral
 ```
 Upon invocation nut will clone a new container from `trusty`, execute the RUN statement, which in turn will build ruby debian package, and then copy theresulting debian from /root/ruby-2.2.3_1.0.0_amd64.deb to current directory.
+
+
+### Development
+
+We use vagrant for development purpose. Following will setup a development vagrant instance
+as well as kick a test job.
+
+```
+vagrant up
+vagrant reload
+vagrant ssh -c "nut -specfile gopath/src/github.com/PagerDuty/nut/Dockerfile -ephemeral"
+```
+
+### LICENSE
+
+[Apache 2](http://www.apache.org/licenses/LICENSE-2.0)
