@@ -47,5 +47,6 @@ Vagrant.configure(2) do |config|
     echo "#{lxc_config}" | tee /home/vagrant/.config/lxc/default.conf
     echo "#{lxc_usernet}" | sudo tee /etc/lxc/lxc-usernet
     echo "#{lxc_usernet}" | tee /home/vagrant/.config/lxc/lxc.conf
+    lxc-create -n trusty -t download -- -a amd64 -r trusty -d ubuntu
   SHELL
 end

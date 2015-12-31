@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"fmt"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/lxc/go-lxc.v2"
 	"gopkg.in/yaml.v2"
@@ -280,6 +281,7 @@ func (spec *Spec) runCommand(command []string) error {
 	}
 	if exitCode != 0 {
 		log.Warnf("Failed to execute command: '%s'. Exit code: %d", strings.Join(command, " "), exitCode)
+		return fmt.Errorf("Failed to execute command: '%s'. Exit code: %d", strings.Join(command, " "), exitCode)
 	}
 	return nil
 }
