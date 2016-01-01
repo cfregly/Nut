@@ -126,7 +126,8 @@ func (spec *Spec) Build() error {
 				return errors.New("Container already built. Multiple FROM declaration?")
 			}
 			var err error
-			spec.State.Container, err = CloneAndStartContainer(words[1], spec.ID)
+			name := ParentName(words[1])
+			spec.State.Container, err = CloneAndStartContainer(name, spec.ID)
 			if err != nil {
 				log.Errorf("Failed to clone container. Error: %s\n", err)
 				return err

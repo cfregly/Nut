@@ -49,6 +49,26 @@ nut -ephemeral
 ```
 Upon invocation nut will clone a new container from `trusty`, execute the RUN statement, which in turn will build ruby debian package, and then copy theresulting debian from /root/ruby-2.2.3_1.0.0_amd64.deb to current directory.
 
+Since vanilla LXC is not aware of image repositories, all containers are created from cloning existing container(s).
+A trusty (ubuntu 14.04) container can be created as
+```
+lxc-create -n trusty -t download -- -d ubuntu -a amd64 -r trusty
+```
+This in turn, can be used inside a Dockerfile DSL via the `FROM` instruction.
+Nut converts the image name from  `org/repo:version` to 'org-repo_version' as the container
+from which the new container will be built.
+For example `FROM pagerduty/ruby:2.2.3` will instruct Nut to create a container by cloning
+an existing container named `pagerduty-ruby_2.2.3`.
+
+Since Nut uses LXC it has few key differences from Docker/Rocket style app containers. These include:
+- Once built, they do not have image dependency. They can be run without
+their parent images.
+- They also dont require overlayfs or any other union file system
+- Can be run as any normal user (e.g. service X can create and run containers as X).
+- Since these are full system conatiners, you dont have to provide any specific entrypoint. You can daemonize your app
+as you would do on host OS  (like using sys-v init script, or upstrat or systemd unit file etc).
+- Since these are full system containers, you also wont have to reap zombie processes explicitly, init system will do it for you
+
 
 ### Development
 
