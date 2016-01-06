@@ -91,14 +91,24 @@ func (spec *Spec) Parse() error {
 	return nil
 }
 
+func (spec *Spec) Stop() error {
+	if spec.State.Container == nil {
+		return fmt.Errorf("Container is not initialized")
+	}
+	if !spec.State.Container.Defined() {
+		return fmt.Errorf("Container is not present")
+	}
+	if spec.State.Container.State() == lxc.RUNNING {
+		return spec.State.Container.Stop()
+	}
+	return nil
+}
 func (spec *Spec) Destroy() error {
 	if spec.State.Container == nil {
-		log.Warn("Container is not initialized")
-		return nil
+		return fmt.Errorf("Container is not initialized")
 	}
-	if spec.State.Container.Defined() {
-		log.Warn("Container is not present")
-		return nil
+	if !spec.State.Container.Defined() {
+		return fmt.Errorf("Container is not present")
 	}
 	if spec.State.Container.State() == lxc.RUNNING {
 		if err := spec.State.Container.Stop(); err != nil {
@@ -106,7 +116,7 @@ func (spec *Spec) Destroy() error {
 			return err
 		}
 	}
-	return spec.Destroy()
+	return spec.State.Container.Destroy()
 }
 
 func (spec *Spec) Build() error {

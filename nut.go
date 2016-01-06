@@ -20,7 +20,8 @@ Options:
 	-specfile    Local path to the specification file (defaults to dockerfle)
 	-ephemeral   Destroy the container after creation
 	-name        Name of the container (defaults to randomly generated UUID)
-	-version    Print version information
+	-stop        Stop container at the end
+	-version     Print version information
 	`
 	return strings.TrimSpace(helpText)
 }
@@ -30,12 +31,16 @@ const (
 )
 
 func main() {
+
 	file := flag.String("specfile", "Dockerfile", "Container build specification file")
 	help := flag.Bool("help", false, "Show usage")
+	stopAfterBuild := flag.Bool("stop", false, "Stop container after build")
 	ephemeral := flag.Bool("ephemeral", false, "Destroy the container after creating it")
 	versionFalg := flag.Bool("version", false, "Print version information")
 	name := flag.String("name", "", "Name of the resulting container (defaults to randomly generated UUID)")
+
 	flag.Parse()
+
 	if *help {
 		fmt.Println(usage())
 		return
@@ -60,7 +65,16 @@ func main() {
 	if err := spec.Build(); err != nil {
 		log.Fatalf("Failed to build container from dockerfile. Error: %s\n", err)
 	}
+	if *stopAfterBuild {
+		log.Infof("Stopping container")
+		if err := spec.Stop(); err != nil {
+			log.Fatalf("Failed to stop container. Error: %s\n", err)
+		}
+	}
 	if *ephemeral {
 		log.Infof("Ephemeral mode. Destroying the container")
+		if err := spec.Destroy(); err != nil {
+			log.Fatalf("Failed to destroy container. Error: %s\n", err)
+		}
 	}
 }
