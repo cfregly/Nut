@@ -39,7 +39,7 @@ func main() {
 	ephemeral := flag.Bool("ephemeral", false, "Destroy the container after creating it")
 	versionFalg := flag.Bool("version", false, "Print version information")
 	name := flag.String("name", "", "Name of the resulting container (defaults to randomly generated UUID)")
-	volume := flag.String("volume", "", "Mount host directory inside container. Format: '[host_directory:]container_directory")
+	volume := flag.String("volume", "", "Mount host directory inside container. Format: '[host_directory:]container_directory[:mount options]")
 
 	flag.Parse()
 
