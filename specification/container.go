@@ -3,8 +3,12 @@ package specification
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/lxc/go-lxc.v2"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -33,7 +37,56 @@ func UUID() (string, error) {
 	return hex.EncodeToString(u), nil
 }
 
-func CloneAndStartContainer(original, cloned string) (*lxc.Container, error) {
+func SetupBindMounts(container *lxc.Container, volume string) error {
+	// bind syntax: "/tmp/xxx home/ubuntu/foo none bind,create=dir"
+	// cli spec:  [host_directory:]container_directory
+	// For unprivileged containers rw bind mount still does not allow writing files from within the container, due to posix ACL
+	// workaround: on host:
+	//   setfacl -Rm user:ranjib:rwx,default:user:ranjib:rwx,user:100000:rwx,user:101000:rwx,default:user:100000:rwx,default:user:101000:rwx /tmp/xxx
+	parts := strings.Split(volume, ":")
+	options := []string{"none", "bind,create=dir", "0", "0"}
+	var hostDir string
+	var containerDir string
+	switch len(parts) {
+	case 1:
+		containerDir = volume
+		dir, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		hostDir = dir
+	case 2:
+		containerDir = parts[1]
+		if p, err := filepath.Abs(parts[0]); err != nil {
+			return err
+		} else {
+			hostDir = p
+		}
+	case 3:
+		containerDir = parts[1]
+		if p, err := filepath.Abs(parts[0]); err != nil {
+			return err
+		} else {
+			hostDir = p
+		}
+		options[1] = "bind," + parts[2]
+	default:
+		fmt.Errorf("Invalid volume spec. Parts: %d", len(parts))
+	}
+	containerDir = strings.TrimPrefix(containerDir, "/")
+	val := hostDir + " " + containerDir + " " + strings.Join(options, " ")
+	log.Debugf("Setting up bind mounts: %s\n", val)
+	path := container.ConfigFileName()
+	if err := container.SetConfigItem("lxc.mount.entry", val); err != nil {
+		return err
+	}
+	if err := container.SaveConfigFile(path); err != nil {
+		return err
+	}
+	return nil
+}
+
+func CloneAndStartContainer(original, cloned, volume string) (*lxc.Container, error) {
 	orig, err := lxc.NewContainer(original)
 	if err != nil {
 		log.Errorf("Failed to initialize container object. Error: %v", err)
@@ -46,7 +99,16 @@ func CloneAndStartContainer(original, cloned string) (*lxc.Container, error) {
 	ct, err := lxc.NewContainer(cloned)
 	if err != nil {
 		log.Errorf("Failed to clone container %s as %s. Error: %v", original, cloned, err)
+		return nil, err
 	}
+
+	if volume != "" {
+		if err := SetupBindMounts(ct, volume); err != nil {
+			log.Errorf("Failed to setup volumes for %s. Error: %v", cloned, err)
+			return nil, err
+		}
+	}
+
 	if err := ct.Start(); err != nil {
 		log.Errorf("Failed to start cloned container %s. Error: %v", cloned, err)
 		return nil, err

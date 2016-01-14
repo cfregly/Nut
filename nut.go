@@ -22,6 +22,7 @@ Options:
 	-name        Name of the container (defaults to randomly generated UUID)
 	-stop        Stop container at the end
 	-version     Print version information
+	-volume      Mount host directory inside container
 	`
 	return strings.TrimSpace(helpText)
 }
@@ -38,6 +39,7 @@ func main() {
 	ephemeral := flag.Bool("ephemeral", false, "Destroy the container after creating it")
 	versionFalg := flag.Bool("version", false, "Print version information")
 	name := flag.String("name", "", "Name of the resulting container (defaults to randomly generated UUID)")
+	volume := flag.String("volume", "", "Mount host directory inside container. Format: '[host_directory:]container_directory[:mount options]")
 
 	flag.Parse()
 
@@ -62,7 +64,7 @@ func main() {
 	if err := spec.Parse(); err != nil {
 		log.Fatalf("Failed to parse dockerfile. Error: %s\n", err)
 	}
-	if err := spec.Build(); err != nil {
+	if err := spec.Build(*volume); err != nil {
 		log.Fatalf("Failed to build container from dockerfile. Error: %s\n", err)
 	}
 	if *stopAfterBuild {
