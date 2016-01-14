@@ -119,7 +119,7 @@ func (spec *Spec) Destroy() error {
 	return spec.State.Container.Destroy()
 }
 
-func (spec *Spec) Build() error {
+func (spec *Spec) Build(volume string) error {
 	spec.State = BuilderState{
 		manifest: Manifest{
 			Labels:       make(map[string]string),
@@ -137,7 +137,7 @@ func (spec *Spec) Build() error {
 			}
 			var err error
 			name := ParentName(words[1])
-			spec.State.Container, err = CloneAndStartContainer(name, spec.ID)
+			spec.State.Container, err = CloneAndStartContainer(name, spec.ID, volume)
 			if err != nil {
 				log.Errorf("Failed to clone container. Error: %s\n", err)
 				return err
