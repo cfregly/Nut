@@ -69,7 +69,7 @@ func SetupBindMounts(container *lxc.Container, volume string) error {
 		} else {
 			hostDir = p
 		}
-		options[1] = "bind,create=dir," + parts[2]
+		options[1] = "bind," + parts[2]
 	default:
 		fmt.Errorf("Invalid volume spec. Parts: %d", len(parts))
 	}
