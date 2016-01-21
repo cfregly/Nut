@@ -2,9 +2,10 @@
 # vi: set ft=ruby :
 
 Vagrant.configure(2) do |config|
-  config.vm.box = 'ubuntu/trusty64'
+  config.vm.box = 'pagerduty/trusty64'
 
   config.vm.synced_folder '.', '/home/vagrant/gopath/src/github.com/PagerDuty/nut'
+  config.vm.synced_folder '../dockerfiles', '/home/vagrant/dockerfiles'
 
   $script = <<-SCRIPT
     sudo chown -R vagrant:vagrant /home/vagrant/gopath
