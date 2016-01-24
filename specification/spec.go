@@ -309,3 +309,23 @@ func (spec *Spec) runCommand(command []string) error {
 	}
 	return nil
 }
+
+func (spec *Spec) ExportContainer(file string, sudo bool) error {
+	//command := "sudo tar -Jcf rootfs1.tar.xz -C ~/.local/share/lxc/ruby_2.3/rootfs  . --numeric-owner"
+	rootfs := spec.State.Container.ConfigItem("lxc.rootfs")[0]
+	command := fmt.Sprintf("tar -Jcf %s -C %s  . --numeric-owner", file, rootfs)
+	if sudo {
+		command = "sudo " + command
+
+	}
+	log.Infof("Invoking: %s", command)
+	parts := strings.Fields(command)
+	cmd := exec.Command(parts[0], parts[1:]...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Error(string(out))
+		log.Error(err)
+		return err
+	}
+	return nil
+}
