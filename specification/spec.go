@@ -21,6 +21,7 @@ type Manifest struct {
 	Labels       map[string]string
 	Maintainers  []string
 	ExposedPorts []uint64
+	EntryPoint   []string
 }
 
 type BuilderState struct {
@@ -199,9 +200,21 @@ func (spec *Spec) Build(volume string) error {
 		case "STOPSIGNAL":
 			// FIXME
 		case "CMD":
-			// FIXME
+			if len(spec.State.manifest.EntryPoint) == 0 {
+				spec.State.manifest.EntryPoint = words[1:]
+			} else {
+				log.Errorf("Entrypoint/CMD is already defined. Probably multiple declaration")
+				return fmt.Errorf("Entrypoint/CMD is already defined. Probably multiple declaration")
+			}
 		case "ENTRYPOINT":
-			// FIXME
+			if len(spec.State.manifest.EntryPoint) == 0 {
+				spec.State.manifest.EntryPoint = words[1:]
+			} else {
+				log.Errorf("Entrypoint/CMD is already defined. Probably multiple declaration")
+				return fmt.Errorf("Entrypoint/CMD is already defined. Probably multiple declaration")
+			}
+		default:
+			fmt.Errorf("Unknown instruction")
 		}
 	}
 	if err := spec.fetchArtifact(); err != nil {
