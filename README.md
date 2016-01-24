@@ -5,20 +5,26 @@ Build LXC containers using Dockerfile like DSL
 ### Usage
 
 ```
-nut -help
+nut build -help
 ```
 
 ```
-Usage: nut [options]
 
-  Build containers using LXC runtime with pluggable build DSLs
-
-Options:
-
-  -help        Show usage
-  -specfile    Local path to the specification file (defaults to dockerfle)
-  -ephemeral   Destroy the container after creation
-  -name        Name of the container (defaults to randomly generated UUID)
+Usage of build:
+  -ephemeral
+      Destroy the container after creating it
+  -export string
+      File path for the container tarball
+  -export-sudo
+      Use sudo while invoking tar
+  -name string
+      Name of the resulting container (defaults to randomly generated UUID)
+  -specfile string
+      Container build specification file (default "Dockerfile")
+  -stop
+      Stop container after build
+  -volume string
+      Mount host directory inside container. Format: '[host_directory:]container_directory[:mount options]
 ```
 
 #### Artifact  Labels
@@ -45,7 +51,7 @@ LABEL nut_artifact_ruby=/root/ruby-2.2.3_1.0.0_amd64.deb
 ```
 And then nut can be invoked as:
 ```
-nut -ephemeral
+nut build -ephemeral
 ```
 Upon invocation nut will clone a new container from `trusty`, execute the RUN statement, which in turn will build ruby debian package, and then copy theresulting debian from /root/ruby-2.2.3_1.0.0_amd64.deb to current directory.
 
@@ -60,14 +66,12 @@ from which the new container will be built.
 For example `FROM pagerduty/ruby:2.2.3` will instruct Nut to create a container by cloning
 an existing container named `pagerduty-ruby_2.2.3`.
 
-Since Nut uses LXC it has few key differences from Docker/Rocket style app containers. These include:
-- Once built, they do not have image dependency. They can be run without
-their parent images.
-- They also dont require overlayfs or any other union file system
-- Can be run as any normal user (e.g. service X can create and run containers as X).
-- Since these are full system conatiners, you dont have to provide any specific entrypoint. You can daemonize your app
+Since Nut uses LXC it provides system container, which has few key differences from Docker/Rocket style app containers. These include:
+- Once built, resulting container tarballs are independent, they do not have image dependency, and can be run without their parent images.
+- Nut does not rely on overlayfs or any other union file system (whatever lxc supports)
+- Nut is built and tested as unprivileged user. Hence `nut` can be run as any normal user (e.g. service X can create and run containers as X).
+- Since these are full system conatiners, you dont have to provide any specific entrypoint, make your command a service instead (init.d script, systmed unit file etc.
 as you would do on host OS  (like using sys-v init script, or upstrat or systemd unit file etc).
-- Since these are full system containers, you also wont have to reap zombie processes explicitly, init system will do it for you
 
 
 ### Development
@@ -78,7 +82,7 @@ as well as kick a test job.
 ```
 vagrant up
 vagrant reload
-vagrant ssh -c "nut -specfile gopath/src/github.com/PagerDuty/nut/Dockerfile -ephemeral"
+vagrant ssh -c "nut build -specfile gopath/src/github.com/PagerDuty/nut/Dockerfile -ephemeral"
 ```
 
 ### LICENSE
