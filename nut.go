@@ -16,6 +16,7 @@ func main() {
 	c.Args = os.Args[1:]
 	c.Commands = map[string]cli.CommandFactory{
 		"build": commands.Build,
+		"fetch": commands.Fetch,
 	}
 	exitStatus, err := c.Run()
 	if err != nil {
