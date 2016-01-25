@@ -5,22 +5,7 @@ import (
 	"github.com/mitchellh/cli"
 	log "github.com/sirupsen/logrus"
 	"os"
-	"strings"
 )
-
-func usage() string {
-	var helpText = `
-Usage: nut [options]
-
-	Build containers using LXC runtime with pluggable build DSLs
-
-Options:
-
-	-help        Show usage
-	-version     Print version information
-	`
-	return strings.TrimSpace(helpText)
-}
 
 const (
 	version = "0.0.1"
