@@ -3,8 +3,12 @@ package commands
 import (
 	"flag"
 	"github.com/PagerDuty/nut/specification"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/mitchellh/cli"
 	log "github.com/sirupsen/logrus"
+	"os"
 	"strings"
 )
 
@@ -24,6 +28,7 @@ func (command *BuildCommand) Help() string {
 		-stop        Stop container at the end
 		-volume      Mount host directory inside container
 		-export      Create tarball of container rootfs (assumes -stop)
+		-publish     Publish tarball in S3
 	`
 	return strings.TrimSpace(helpText)
 }
@@ -44,8 +49,23 @@ func (command *BuildCommand) Run(args []string) int {
 	export := flagSet.String("export", "", "File path for the container tarball")
 	exportSudo := flagSet.Bool("export-sudo", false, "Use sudo while invoking tar")
 	volume := flagSet.String("volume", "", "Mount host directory inside container. Format: '[host_directory:]container_directory[:mount options]")
+	publish := flagSet.String("publish", "", "Publish tarball in s3 (assumes -stop, -export)")
 
 	flagSet.Parse(args)
+	if *publish != "" {
+		if *export == "" {
+			uuid, err := specification.UUID()
+			if err != nil {
+				log.Errorln(err)
+				return -1
+			}
+			*export = uuid
+		}
+	}
+
+	if *export != "" {
+		*stopAfterBuild = true
+	}
 	if *name == "" {
 		uuid, err := specification.UUID()
 		if err != nil {
@@ -76,11 +96,6 @@ func (command *BuildCommand) Run(args []string) int {
 	}
 
 	if *export != "" {
-		log.Infof("Stopping container")
-		if err := spec.Stop(); err != nil {
-			log.Errorf("Failed to stop container. Error: %s\n", err)
-			return -1
-		}
 		log.Infof("Exporting container")
 		if err := spec.ExportContainer(*export, *exportSudo); err != nil {
 			log.Errorf("Failed to export container. Error: %s\n", err)
@@ -92,6 +107,29 @@ func (command *BuildCommand) Run(args []string) int {
 		log.Infof("Ephemeral mode. Destroying the container")
 		if err := spec.Destroy(); err != nil {
 			log.Errorf("Failed to destroy container. Error: %s\n", err)
+			return -1
+		}
+	}
+	if *publish != "" {
+		parts := strings.Split(*publish, "/")
+		bucket := parts[0]
+		key := strings.Join(parts[1:], "/")
+		svc := s3.New(session.New(), aws.NewConfig().WithRegion("us-west-1"))
+		fi, err := os.Open(*export)
+		if err != nil {
+			log.Error(err)
+			return -1
+		}
+		defer fi.Close()
+		params := &s3.PutObjectInput{
+			Bucket: aws.String(bucket),
+			Key:    aws.String(key),
+			Body:   fi,
+		}
+
+		_, uploadErr := svc.PutObject(params)
+		if uploadErr != nil {
+			log.Error(uploadErr)
 			return -1
 		}
 	}
