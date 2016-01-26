@@ -97,7 +97,7 @@ func (command *BuildCommand) Run(args []string) int {
 
 	if *export != "" {
 		log.Infof("Exporting container")
-		if err := spec.ExportContainer(*export, *exportSudo); err != nil {
+		if err := spec.Export(*export, *exportSudo); err != nil {
 			log.Errorf("Failed to export container. Error: %s\n", err)
 			return -1
 		}

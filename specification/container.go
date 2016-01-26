@@ -7,6 +7,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/lxc/go-lxc.v2"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -119,4 +120,24 @@ func CloneAndStartContainer(original, cloned, volume string) (*lxc.Container, er
 		return nil, err
 	}
 	return ct, nil
+}
+
+func ExportContainer(name, file string, sudo bool) error {
+	//command := "sudo tar -Jcpf rootfs1.tar.xz -C ~/.local/share/lxc/ruby_2.3/rootfs  . --numeric-owner"
+	lxcdir := lxc.GlobalConfigItem("lxc.lxcpath")
+	ctDir := filepath.Join(lxcdir, name)
+	command := fmt.Sprintf("tar -Jcpf %s --numeric-owner -C %s .", file, ctDir)
+	if sudo {
+		command = "sudo " + command
+	}
+	log.Infof("Invoking: %s", command)
+	parts := strings.Fields(command)
+	cmd := exec.Command(parts[0], parts[1:]...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Error(string(out))
+		log.Error(err)
+		return err
+	}
+	return nil
 }
