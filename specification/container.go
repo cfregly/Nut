@@ -4,6 +4,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/lxc/go-lxc.v2"
 	"os"
@@ -122,15 +125,11 @@ func CloneAndStartContainer(original, cloned, volume string) (*lxc.Container, er
 	return ct, nil
 }
 
-func ExportContainer(name, file string, sudo, pigz bool) error {
+func ExportContainer(name, file string, sudo bool) error {
 	//command := "sudo tar -Jcpf rootfs1.tar.xz -C ~/.local/share/lxc/ruby_2.3/rootfs  . --numeric-owner"
 	lxcdir := lxc.GlobalConfigItem("lxc.lxcpath")
 	ctDir := filepath.Join(lxcdir, name)
-	var command string
-	if pigz {
-	} else {
-		command = fmt.Sprintf("tar -Jcpf %s --numeric-owner -C %s .", file, ctDir)
-	}
+	command := fmt.Sprintf("tar -Jcpf %s --numeric-owner -C %s .", file, ctDir)
 	if sudo {
 		command = "sudo " + command
 	}
@@ -185,4 +184,25 @@ func UpdateUTS(name string) error {
 		return err
 	}
 	return ct.SaveConfigFile(ct.ConfigFileName())
+}
+
+func Publish(file, region, bucket, key string) error {
+	svc := s3.New(session.New(), aws.NewConfig().WithRegion("region"))
+	fi, err := os.Open(file)
+	if err != nil {
+		return err
+	}
+	defer fi.Close()
+	params := &s3.PutObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+		Body:   fi,
+	}
+
+	log.Infof("Publishing container in s3")
+	_, uploadErr := svc.PutObject(params)
+	if uploadErr != nil {
+		return uploadErr
+	}
+	return nil
 }
