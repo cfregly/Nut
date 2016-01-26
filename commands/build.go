@@ -127,6 +127,7 @@ func (command *BuildCommand) Run(args []string) int {
 			Body:   fi,
 		}
 
+		log.Infof("Publishing container in s3")
 		_, uploadErr := svc.PutObject(params)
 		if uploadErr != nil {
 			log.Error(uploadErr)
