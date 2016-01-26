@@ -18,6 +18,7 @@ func main() {
 		"build": commands.Build,
 		"fetch": commands.Fetch,
 	}
+	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	exitStatus, err := c.Run()
 	if err != nil {
 		log.Errorln(err)

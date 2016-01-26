@@ -32,6 +32,7 @@ func (command *FetchCommand) Help() string {
 		-bucket   S3 bucket name
 		-key      S3 key name
 		-name     Name of the container (Default: random uuid)
+		-sudo     Use sudo to decompress image
 	`
 	return strings.TrimSpace(helpText)
 }
@@ -45,7 +46,8 @@ func (command *FetchCommand) Run(args []string) int {
 	name := flagSet.String("name", "", "Name of the container (Default: random UUID)")
 	bucket := flagSet.String("bucket", "", "S3 bucket")
 	key := flagSet.String("key", "", "S3 key")
-	region := flagSet.String("region", "us-west-1", "S3 reion")
+	region := flagSet.String("region", "us-west-1", "S3 region")
+	sudo := flagSet.Bool("sudo", false, "Use sudo during decompression of image")
 	flagSet.Parse(args)
 	if *bucket == "" {
 		log.Errorf("Must provide the s3 bucket name")
@@ -87,12 +89,15 @@ func (command *FetchCommand) Run(args []string) int {
 		name = &uuid
 	}
 	lxcpath := lxc.GlobalConfigItem("lxc.lxcpath")
-	rootfs := filepath.Join(lxcpath, *name, "rootfs")
-	if err := os.MkdirAll(rootfs, 0755); err != nil {
+	ctDir := filepath.Join(lxcpath, *name)
+	untarCommand := fmt.Sprintf("tar --numeric-owner -xpJf  %s -C %s", fo.Name(), ctDir)
+	if *sudo {
+		untarCommand = "sudo " + untarCommand
+	}
+	if err := os.Mkdir(ctDir, 0770); err != nil {
 		log.Errorln(err)
 		return -1
 	}
-	untarCommand := fmt.Sprintf("tar --numeric-owner -xpJf  %s -C %s", fo.Name(), rootfs)
 	log.Infof("Invoking: %s", untarCommand)
 	parts := strings.Fields(untarCommand)
 	cmd := exec.Command(parts[0], parts[1:]...)
@@ -102,5 +107,27 @@ func (command *FetchCommand) Run(args []string) int {
 		log.Error(err)
 		return -1
 	}
+	if err := updateUTS(*name); err != nil {
+		log.Errorln(err)
+		return -1
+	}
 	return 0
+}
+
+func updateUTS(name string) error {
+	ct, err := lxc.NewContainer(name)
+	rootfs := filepath.Join(lxc.GlobalConfigItem("lxc.lxcpath"), name, "rootfs")
+	if err != nil {
+		return err
+	}
+	if err := ct.LoadConfigFile(ct.ConfigFileName()); err != nil {
+		return err
+	}
+	if err := ct.SetConfigItem("lxc.utsname", name); err != nil {
+		return err
+	}
+	if err := ct.SetConfigItem("lxc.rootfs", rootfs); err != nil {
+		return err
+	}
+	return ct.SaveConfigFile(ct.ConfigFileName())
 }
