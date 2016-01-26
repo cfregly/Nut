@@ -122,11 +122,15 @@ func CloneAndStartContainer(original, cloned, volume string) (*lxc.Container, er
 	return ct, nil
 }
 
-func ExportContainer(name, file string, sudo bool) error {
+func ExportContainer(name, file string, sudo, pigz bool) error {
 	//command := "sudo tar -Jcpf rootfs1.tar.xz -C ~/.local/share/lxc/ruby_2.3/rootfs  . --numeric-owner"
 	lxcdir := lxc.GlobalConfigItem("lxc.lxcpath")
 	ctDir := filepath.Join(lxcdir, name)
-	command := fmt.Sprintf("tar -Jcpf %s --numeric-owner -C %s .", file, ctDir)
+	var command string
+	if pigz {
+	} else {
+		command = fmt.Sprintf("tar -Jcpf %s --numeric-owner -C %s .", file, ctDir)
+	}
 	if sudo {
 		command = "sudo " + command
 	}
@@ -140,4 +144,45 @@ func ExportContainer(name, file string, sudo bool) error {
 		return err
 	}
 	return nil
+}
+
+func DecompressImage(name, file string, sudo bool) error {
+	lxcpath := lxc.GlobalConfigItem("lxc.lxcpath")
+	ctDir := filepath.Join(lxcpath, name)
+	untarCommand := fmt.Sprintf("tar --numeric-owner -xpJf  %s -C %s", file, ctDir)
+	if sudo {
+		untarCommand = "sudo " + untarCommand
+	}
+	if err := os.Mkdir(ctDir, 0770); err != nil {
+		log.Errorln(err)
+		return err
+	}
+	log.Infof("Invoking: %s", untarCommand)
+	parts := strings.Fields(untarCommand)
+	cmd := exec.Command(parts[0], parts[1:]...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Error(string(out))
+		log.Error(err)
+		return err
+	}
+	return nil
+}
+
+func UpdateUTS(name string) error {
+	ct, err := lxc.NewContainer(name)
+	rootfs := filepath.Join(lxc.GlobalConfigItem("lxc.lxcpath"), name, "rootfs")
+	if err != nil {
+		return err
+	}
+	if err := ct.LoadConfigFile(ct.ConfigFileName()); err != nil {
+		return err
+	}
+	if err := ct.SetConfigItem("lxc.utsname", name); err != nil {
+		return err
+	}
+	if err := ct.SetConfigItem("lxc.rootfs", rootfs); err != nil {
+		return err
+	}
+	return ct.SaveConfigFile(ct.ConfigFileName())
 }

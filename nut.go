@@ -19,6 +19,7 @@ func main() {
 		"build":   commands.Build,
 		"fetch":   commands.Fetch,
 		"publish": commands.Publish,
+		"restore": commands.Restore,
 		"run":     commands.Run,
 	}
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})

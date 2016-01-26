@@ -3,6 +3,7 @@ package commands
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"github.com/PagerDuty/nut/specification"
 	"github.com/mitchellh/cli"
 	log "github.com/sirupsen/logrus"
@@ -19,6 +20,11 @@ func Archive() (cli.Command, error) {
 func (command *ArchiveCommand) Help() string {
 	helpText := `
 	Usage: nut archive [options] <container> <image>
+
+	nut archive is used to build tarball image from an existing
+	container.
+
+	-sudo    Use sudo while invoking tar
 	`
 	return strings.TrimSpace(helpText)
 }
@@ -29,9 +35,8 @@ func (command *ArchiveCommand) Synopsis() string {
 
 func (command *ArchiveCommand) Run(args []string) int {
 	flagSet := flag.NewFlagSet("archive", flag.ExitOnError)
+	flagSet.Usage = func() { fmt.Println(command.Help()) }
 	sudo := flagSet.Bool("sudo", false, "Use sudo while invoking tar")
-	log.Infof("Exporting container")
-
 	if err := flagSet.Parse(args); err != nil {
 		log.Errorln(err)
 		return -1
