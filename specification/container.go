@@ -4,9 +4,13 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/lxc/go-lxc.v2"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -119,4 +123,83 @@ func CloneAndStartContainer(original, cloned, volume string) (*lxc.Container, er
 		return nil, err
 	}
 	return ct, nil
+}
+
+func ExportContainer(name, file string, sudo bool) error {
+	//command := "sudo tar -Jcpf rootfs1.tar.xz -C ~/.local/share/lxc/ruby_2.3/rootfs  . --numeric-owner"
+	lxcdir := lxc.GlobalConfigItem("lxc.lxcpath")
+	ctDir := filepath.Join(lxcdir, name)
+	command := fmt.Sprintf("tar -Jcpf %s --numeric-owner -C %s .", file, ctDir)
+	if sudo {
+		command = "sudo " + command
+	}
+	log.Infof("Invoking: %s", command)
+	parts := strings.Fields(command)
+	cmd := exec.Command(parts[0], parts[1:]...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Error(string(out))
+		log.Error(err)
+		return err
+	}
+	return nil
+}
+
+func DecompressImage(name, file string, sudo bool) error {
+	lxcpath := lxc.GlobalConfigItem("lxc.lxcpath")
+	ctDir := filepath.Join(lxcpath, name)
+	untarCommand := fmt.Sprintf("tar --numeric-owner -xpJf  %s -C %s", file, ctDir)
+	if sudo {
+		untarCommand = "sudo " + untarCommand
+	}
+	if err := os.Mkdir(ctDir, 0770); err != nil {
+		log.Errorln(err)
+		return err
+	}
+	log.Infof("Invoking: %s", untarCommand)
+	parts := strings.Fields(untarCommand)
+	cmd := exec.Command(parts[0], parts[1:]...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Error(string(out))
+		log.Error(err)
+		return err
+	}
+	return nil
+}
+
+func UpdateUTS(name string) error {
+	ct, err := lxc.NewContainer(name)
+	rootfs := filepath.Join(lxc.GlobalConfigItem("lxc.lxcpath"), name, "rootfs")
+	if err != nil {
+		return err
+	}
+	if err := ct.SetConfigItem("lxc.utsname", name); err != nil {
+		return err
+	}
+	if err := ct.SetConfigItem("lxc.rootfs", rootfs); err != nil {
+		return err
+	}
+	return ct.SaveConfigFile(ct.ConfigFileName())
+}
+
+func Publish(file, region, bucket, key string) error {
+	svc := s3.New(session.New(), aws.NewConfig().WithRegion("region"))
+	fi, err := os.Open(file)
+	if err != nil {
+		return err
+	}
+	defer fi.Close()
+	params := &s3.PutObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+		Body:   fi,
+	}
+
+	log.Infof("Publishing container in s3")
+	_, uploadErr := svc.PutObject(params)
+	if uploadErr != nil {
+		return uploadErr
+	}
+	return nil
 }

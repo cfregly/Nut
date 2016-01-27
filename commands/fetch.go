@@ -9,12 +9,9 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/mitchellh/cli"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/lxc/go-lxc.v2"
 	"io"
 	"io/ioutil"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 )
 
@@ -43,6 +40,7 @@ func (command *FetchCommand) Synopsis() string {
 
 func (command *FetchCommand) Run(args []string) int {
 	flagSet := flag.NewFlagSet("fetch", flag.ExitOnError)
+	flagSet.Usage = func() { fmt.Println(command.Help()) }
 	name := flagSet.String("name", "", "Name of the container (Default: random UUID)")
 	bucket := flagSet.String("bucket", "", "S3 bucket")
 	key := flagSet.String("key", "", "S3 key")
@@ -88,46 +86,13 @@ func (command *FetchCommand) Run(args []string) int {
 		}
 		name = &uuid
 	}
-	lxcpath := lxc.GlobalConfigItem("lxc.lxcpath")
-	ctDir := filepath.Join(lxcpath, *name)
-	untarCommand := fmt.Sprintf("tar --numeric-owner -xpJf  %s -C %s", fo.Name(), ctDir)
-	if *sudo {
-		untarCommand = "sudo " + untarCommand
-	}
-	if err := os.Mkdir(ctDir, 0770); err != nil {
+	if err := specification.DecompressImage(*name, fo.Name(), *sudo); err != nil {
 		log.Errorln(err)
 		return -1
 	}
-	log.Infof("Invoking: %s", untarCommand)
-	parts := strings.Fields(untarCommand)
-	cmd := exec.Command(parts[0], parts[1:]...)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Error(string(out))
-		log.Error(err)
-		return -1
-	}
-	if err := updateUTS(*name); err != nil {
+	if err := specification.UpdateUTS(*name); err != nil {
 		log.Errorln(err)
 		return -1
 	}
 	return 0
-}
-
-func updateUTS(name string) error {
-	ct, err := lxc.NewContainer(name)
-	rootfs := filepath.Join(lxc.GlobalConfigItem("lxc.lxcpath"), name, "rootfs")
-	if err != nil {
-		return err
-	}
-	if err := ct.LoadConfigFile(ct.ConfigFileName()); err != nil {
-		return err
-	}
-	if err := ct.SetConfigItem("lxc.utsname", name); err != nil {
-		return err
-	}
-	if err := ct.SetConfigItem("lxc.rootfs", rootfs); err != nil {
-		return err
-	}
-	return ct.SaveConfigFile(ct.ConfigFileName())
 }

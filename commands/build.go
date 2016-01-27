@@ -2,13 +2,10 @@ package commands
 
 import (
 	"flag"
+	"fmt"
 	"github.com/PagerDuty/nut/specification"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/mitchellh/cli"
 	log "github.com/sirupsen/logrus"
-	"os"
 	"strings"
 )
 
@@ -41,6 +38,7 @@ func (command *BuildCommand) Synopsis() string {
 func (command *BuildCommand) Run(args []string) int {
 
 	flagSet := flag.NewFlagSet("build", flag.ExitOnError)
+	flagSet.Usage = func() { fmt.Println(command.Help()) }
 
 	file := flagSet.String("specfile", "Dockerfile", "Container build specification file")
 	stopAfterBuild := flagSet.Bool("stop", false, "Stop container after build")
@@ -97,7 +95,7 @@ func (command *BuildCommand) Run(args []string) int {
 
 	if *export != "" {
 		log.Infof("Exporting container")
-		if err := spec.ExportContainer(*export, *exportSudo); err != nil {
+		if err := spec.Export(*export, *exportSudo); err != nil {
 			log.Errorf("Failed to export container. Error: %s\n", err)
 			return -1
 		}
@@ -114,23 +112,8 @@ func (command *BuildCommand) Run(args []string) int {
 		parts := strings.Split(*publish, "/")
 		bucket := parts[0]
 		key := strings.Join(parts[1:], "/")
-		svc := s3.New(session.New(), aws.NewConfig().WithRegion("us-west-1"))
-		fi, err := os.Open(*export)
-		if err != nil {
-			log.Error(err)
-			return -1
-		}
-		defer fi.Close()
-		params := &s3.PutObjectInput{
-			Bucket: aws.String(bucket),
-			Key:    aws.String(key),
-			Body:   fi,
-		}
-
-		log.Infof("Publishing container in s3")
-		_, uploadErr := svc.PutObject(params)
-		if uploadErr != nil {
-			log.Error(uploadErr)
+		if err := specification.Publish(*export, "us-west-1", bucket, key); err != nil {
+			log.Errorln(err)
 			return -1
 		}
 	}

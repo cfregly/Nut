@@ -15,8 +15,12 @@ func main() {
 	c := cli.NewCLI("nut", version)
 	c.Args = os.Args[1:]
 	c.Commands = map[string]cli.CommandFactory{
-		"build": commands.Build,
-		"fetch": commands.Fetch,
+		"archive": commands.Archive,
+		"build":   commands.Build,
+		"fetch":   commands.Fetch,
+		"publish": commands.Publish,
+		"restore": commands.Restore,
+		"run":     commands.Run,
 	}
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	exitStatus, err := c.Run()

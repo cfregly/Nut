@@ -310,22 +310,6 @@ func (spec *Spec) runCommand(command []string) error {
 	return nil
 }
 
-func (spec *Spec) ExportContainer(file string, sudo bool) error {
-	//command := "sudo tar -Jcpf rootfs1.tar.xz -C ~/.local/share/lxc/ruby_2.3/rootfs  . --numeric-owner"
-	lxcdir := lxc.GlobalConfigItem("lxc.lxcpath")
-	ctDir := filepath.Join(lxcdir, spec.State.Container.Name())
-	command := fmt.Sprintf("tar -Jcpf %s --numeric-owner -C %s .", file, ctDir)
-	if sudo {
-		command = "sudo " + command
-	}
-	log.Infof("Invoking: %s", command)
-	parts := strings.Fields(command)
-	cmd := exec.Command(parts[0], parts[1:]...)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Error(string(out))
-		log.Error(err)
-		return err
-	}
-	return nil
+func (spec *Spec) Export(file string, sudo bool) error {
+	return ExportContainer(spec.State.Container.Name(), file, sudo)
 }
