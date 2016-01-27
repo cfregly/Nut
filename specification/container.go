@@ -174,9 +174,6 @@ func UpdateUTS(name string) error {
 	if err != nil {
 		return err
 	}
-	if err := ct.LoadConfigFile(ct.ConfigFileName()); err != nil {
-		return err
-	}
 	if err := ct.SetConfigItem("lxc.utsname", name); err != nil {
 		return err
 	}
